@@ -23,6 +23,11 @@ const (
 	SimpleQueueTransient
 )
 
+const (
+	DeadLetterExchange = "peril_dlx"
+	DeadLetterQueue    = "peril_dlq"
+)
+
 func DeclareAndBind(conn *amqp.Connection, exchange, queueName, key string, queueType SimpleQueueType) (*amqp.Channel, amqp.Queue, error) {
 	ch, err := conn.Channel()
 	if err != nil {
@@ -35,7 +40,7 @@ func DeclareAndBind(conn *amqp.Connection, exchange, queueName, key string, queu
 		queueType == SimpleQueueTransient, // auto delete
 		queueType == SimpleQueueTransient, // exclusive
 		false,                             // no-wait
-		nil,
+		amqp.Table{"x-dead-letter-exchange": DeadLetterExchange},
 	)
 	if err != nil {
 		return nil, amqp.Queue{}, err

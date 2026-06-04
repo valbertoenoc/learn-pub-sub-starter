@@ -33,6 +33,7 @@ func main() {
 	}
 
 	gameState := gamelogic.NewGameState(username)
+	// subscribe pause handler
 	err = pubsub.SubscribeJSON(
 		conn,
 		routing.ExchangePerilDirect,   // exchange name
@@ -45,6 +46,7 @@ func main() {
 		log.Fatalf("Unable to subscribe to message broker.")
 	}
 
+	// subscribe move handler
 	var keyMoveUser = routing.ArmyMovesPrefix + "." + username
 	err = pubsub.SubscribeJSON(
 		conn,
@@ -52,12 +54,24 @@ func main() {
 		keyMoveUser,                  // queue name
 		routing.ArmyMovesPrefix+".*", // queue key
 		pubsub.SimpleQueueTransient,
-		pubsub.HandlerMove(gameState),
+		pubsub.HandlerMove(gameState, connChannel),
 	)
 	if err != nil {
 		log.Fatalf("Unable to subscribe to %s queue.", keyMoveUser)
 	}
 
+	// subscribe war handler
+	err = pubsub.SubscribeJSON(
+		conn,
+		routing.ExchangePerilTopic,   // exchange name
+		"war",                        // queue name
+		routing.ArmyMovesPrefix+".*", // queue key
+		pubsub.SimpleQueueDurable,
+		pubsub.HandlerWar(gameState),
+	)
+	if err != nil {
+		log.Fatal("Unable to subscribe to war queue.")
+	}
 	log.Println("Successfully subscribed to message broker.")
 
 	for {
