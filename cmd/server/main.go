@@ -40,8 +40,6 @@ func main() {
 	}
 	log.Printf("Queue %v declared and bound!", queue)
 
-	fmt.Println("Connection to Message Broker successful.")
-
 	gamelogic.PrintServerHelp()
 	for {
 		args := gamelogic.GetInput()

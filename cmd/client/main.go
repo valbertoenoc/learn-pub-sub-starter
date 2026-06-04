@@ -22,21 +22,44 @@ func main() {
 	}
 	defer conn.Close()
 
+	connChannel, err := conn.Channel()
+	if err != nil {
+		log.Fatalf("Unable to get connection channel: %v", err)
+	}
+
 	username, err := gamelogic.ClientWelcome()
 	if err != nil {
 		log.Fatalf("Unable to connect to message broker.")
 	}
 
-	_, queue, err := pubsub.DeclareAndBind(
+	gameState := gamelogic.NewGameState(username)
+	err = pubsub.SubscribeJSON(
 		conn,
 		routing.ExchangePerilDirect,   // exchange name
 		routing.PauseKey+"."+username, // queue name
 		routing.PauseKey,              // queue key
 		pubsub.SimpleQueueTransient,
+		pubsub.HandlerPause(gameState),
 	)
-	log.Printf("Queue %v declared and bound!", queue)
+	if err != nil {
+		log.Fatalf("Unable to subscribe to message broker.")
+	}
 
-	gameState := gamelogic.NewGameState(username)
+	var keyMoveUser = routing.ArmyMovesPrefix + "." + username
+	err = pubsub.SubscribeJSON(
+		conn,
+		routing.ExchangePerilTopic,   // exchange name
+		keyMoveUser,                  // queue name
+		routing.ArmyMovesPrefix+".*", // queue key
+		pubsub.SimpleQueueTransient,
+		pubsub.HandlerMove(gameState),
+	)
+	if err != nil {
+		log.Fatalf("Unable to subscribe to %s queue.", keyMoveUser)
+	}
+
+	log.Println("Successfully subscribed to message broker.")
+
 	for {
 		args := gamelogic.GetInput()
 		if len(args) == 0 {
@@ -52,10 +75,15 @@ func main() {
 				log.Printf("[spawn] failed at spawning units: %v", err)
 			}
 		case "move":
-			_, err := gameState.CommandMove(args)
+			move, err := gameState.CommandMove(args)
 			if err != nil {
 				log.Printf("[move] failed at moving units: %v", err)
 			}
+			err = pubsub.PublishJSON(connChannel, routing.ExchangePerilTopic, keyMoveUser, move)
+			if err != nil {
+				log.Println("[move] could not publish message.")
+			}
+			log.Println("[move] move message published successfully.")
 		case "status":
 			gameState.CommandStatus()
 		case "help":

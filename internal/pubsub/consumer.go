@@ -1,6 +1,20 @@
 package pubsub
 
-import amqp "github.com/rabbitmq/amqp091-go"
+import (
+	"encoding/json"
+	"fmt"
+	"log"
+
+	amqp "github.com/rabbitmq/amqp091-go"
+)
+
+type AckType int
+
+const (
+	Ack AckType = iota
+	NackRequeue
+	NackDiscard
+)
 
 type SimpleQueueType int
 
@@ -39,4 +53,58 @@ func DeclareAndBind(conn *amqp.Connection, exchange, queueName, key string, queu
 	}
 
 	return ch, queue, nil
+}
+
+func SubscribeJSON[T any](conn *amqp.Connection, exchange, queueName, key string, queueType SimpleQueueType, handler func(T) AckType) error {
+	ch, queue, err := DeclareAndBind(
+		conn,
+		exchange,
+		queueName,
+		key,
+		queueType,
+	)
+	if err != nil {
+		return fmt.Errorf("Could not declare and bind queue: %v", err)
+	}
+	log.Printf("Queue %v declared and bound!", queue)
+
+	deliveries, err := ch.Consume(
+		queue.Name,
+		"", // consumer name empty will be auto generated
+		false,
+		false,
+		false,
+		false,
+		nil,
+	)
+	if err != nil {
+		return fmt.Errorf("Could not consume queue: %v", err)
+	}
+
+	go func() {
+		for delivery := range deliveries {
+			var msg T
+			err := json.Unmarshal(delivery.Body, &msg)
+			if err != nil {
+				log.Printf("error while unmarshalling delivery body: %v", err)
+				continue
+			}
+			ackType := handler(msg)
+
+			switch ackType {
+			case Ack:
+				log.Printf("[ack] message processed successfully.")
+				delivery.Ack(false)
+			case NackRequeue:
+				log.Printf("[nack requeue] message processing failed - requeueing.")
+				delivery.Nack(false, true)
+			case NackDiscard:
+				log.Printf("[nack discard] message processing failed - discarding.")
+				delivery.Nack(false, false)
+			}
+
+		}
+	}()
+
+	return nil
 }
