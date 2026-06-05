@@ -63,11 +63,11 @@ func main() {
 	// subscribe war handler
 	err = pubsub.SubscribeJSON(
 		conn,
-		routing.ExchangePerilTopic,   // exchange name
-		"war",                        // queue name
-		routing.ArmyMovesPrefix+".*", // queue key
+		routing.ExchangePerilTopic,         // exchange name
+		routing.WarRecognitionsPrefix,      // queue name
+		routing.WarRecognitionsPrefix+".*", // queue key
 		pubsub.SimpleQueueDurable,
-		pubsub.HandlerWar(gameState),
+		pubsub.HandlerWar(gameState, connChannel),
 	)
 	if err != nil {
 		log.Fatal("Unable to subscribe to war queue.")

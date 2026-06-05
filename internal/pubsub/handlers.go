@@ -3,6 +3,7 @@ package pubsub
 import (
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/gamelogic"
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/routing"
@@ -26,7 +27,7 @@ func HandlerMove(gs *gamelogic.GameState, ch *amqp.Channel) func(gamelogic.ArmyM
 		switch moveOutcome {
 		case gamelogic.MoveOutcomeSamePlayer:
 			log.Printf("[move] move outcome: %v - discarding message", moveOutcome)
-			return NackDiscard
+			return Ack
 		case gamelogic.MoveOutComeSafe:
 			log.Printf("[move] move outcome: %v - acknowledging message", moveOutcome)
 			return Ack
@@ -44,29 +45,54 @@ func HandlerMove(gs *gamelogic.GameState, ch *amqp.Channel) func(gamelogic.ArmyM
 			)
 			if err != nil {
 				log.Printf("[move] error publishing recognition of war: %v", err)
+				return NackRequeue
 			}
 			log.Println("[move] starting war")
-			return NackRequeue
+			return Ack
 		}
 		return NackDiscard
 	}
 }
 
-func HandlerWar(gs *gamelogic.GameState) func(gamelogic.ArmyMove) AckType {
-	return func(gamelogic.ArmyMove) AckType {
+func HandlerWar(gs *gamelogic.GameState, ch *amqp.Channel) func(gamelogic.RecognitionOfWar) AckType {
+	return func(rw gamelogic.RecognitionOfWar) AckType {
 		defer fmt.Print("> ")
 
-		warOutcome, _, _ := gs.HandleWar(gamelogic.RecognitionOfWar{Attacker: gs.Player, Defender: gs.GetPlayerSnap()})
+		warOutcome, winner, loser := gs.HandleWar(rw)
 		switch warOutcome {
 		case gamelogic.WarOutcomeNotInvolved:
 			return NackRequeue
 		case gamelogic.WarOutcomeNoUnits:
 			return NackDiscard
 		case gamelogic.WarOutcomeOpponentWon:
+			err := PublishGameLog(ch, routing.GameLog{
+				Message:     fmt.Sprintf("%s won a war against %s", winner, loser),
+				Username:    gs.GetUsername(),
+				CurrentTime: time.Now(),
+			})
+			if err != nil {
+				return NackRequeue
+			}
 			return Ack
 		case gamelogic.WarOutcomeYouWon:
+			err := PublishGameLog(ch, routing.GameLog{
+				Message:     fmt.Sprintf("%s won a war against %s", winner, loser),
+				Username:    gs.GetUsername(),
+				CurrentTime: time.Now(),
+			})
+			if err != nil {
+				return NackRequeue
+			}
 			return Ack
 		case gamelogic.WarOutcomeDraw:
+			err := PublishGameLog(ch, routing.GameLog{
+				Message:     fmt.Sprintf("A war between %s and %s resulted in a draw", winner, loser),
+				Username:    gs.GetUsername(),
+				CurrentTime: time.Now(),
+			})
+			if err != nil {
+				return NackRequeue
+			}
 			return Ack
 		}
 

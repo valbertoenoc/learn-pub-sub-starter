@@ -98,13 +98,13 @@ func SubscribeJSON[T any](conn *amqp.Connection, exchange, queueName, key string
 
 			switch ackType {
 			case Ack:
-				log.Printf("[ack] message processed successfully.")
+				log.Printf("acked.")
 				delivery.Ack(false)
 			case NackRequeue:
-				log.Printf("[nack requeue] message processing failed - requeueing.")
+				log.Printf("nack requeue")
 				delivery.Nack(false, true)
 			case NackDiscard:
-				log.Printf("[nack discard] message processing failed - discarding.")
+				log.Printf("nack discarded")
 				delivery.Nack(false, false)
 			}
 
