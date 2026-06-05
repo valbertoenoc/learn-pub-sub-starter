@@ -14,7 +14,7 @@ import (
 func PublishJSON[T any](ch *amqp.Channel, exchange, key string, val T) error {
 	valBytes, err := json.Marshal(val)
 	if err != nil {
-		return fmt.Errorf("unable to marshal val: %w", err)
+		return fmt.Errorf("unable to marshal val: %v", err)
 	}
 
 	return ch.PublishWithContext(context.Background(),
@@ -34,7 +34,7 @@ func PublishGob[T any](ch *amqp.Channel, exchange, key string, val T) error {
 	enc := gob.NewEncoder(&buffer)
 	err := enc.Encode(&val)
 	if err != nil {
-		return fmt.Errorf("unable to encode val: %w", err)
+		return fmt.Errorf("unable to encode val: %v", err)
 	}
 
 	return ch.PublishWithContext(context.Background(),

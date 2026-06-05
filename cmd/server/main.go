@@ -38,7 +38,19 @@ func main() {
 	if err != nil {
 		log.Fatalf("Unable to create and bind queue: %v", err)
 	}
-	log.Printf("Queue %v declared and bound!", queue)
+	log.Printf("Queue %v declared and bound!", queue.Name)
+
+	err = pubsub.SubscribeGob(
+		conn,
+		routing.ExchangePerilTopic,  // exchange
+		queue.Name,                  // queue name
+		routing.GameLogSlug+"."+"*", // routing key
+		pubsub.SimpleQueueDurable,
+		pubsub.HandlerLogs(),
+	)
+	if err != nil {
+		log.Fatalf("could not subscribe to game logs queue %v", err)
+	}
 
 	gamelogic.PrintServerHelp()
 	for {

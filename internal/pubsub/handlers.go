@@ -100,3 +100,14 @@ func HandlerWar(gs *gamelogic.GameState, ch *amqp.Channel) func(gamelogic.Recogn
 	}
 
 }
+
+func HandlerLogs() func(routing.GameLog) AckType {
+	return func(gl routing.GameLog) AckType {
+		defer fmt.Print("> ")
+		err := gamelogic.WriteLog(gl)
+		if err != nil {
+			return NackRequeue
+		}
+		return Ack
+	}
+}

@@ -1,6 +1,8 @@
 package pubsub
 
 import (
+	"bytes"
+	"encoding/gob"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -92,6 +94,62 @@ func SubscribeJSON[T any](conn *amqp.Connection, exchange, queueName, key string
 			err := json.Unmarshal(delivery.Body, &msg)
 			if err != nil {
 				log.Printf("error while unmarshalling delivery body: %v", err)
+				continue
+			}
+			ackType := handler(msg)
+
+			switch ackType {
+			case Ack:
+				log.Printf("acked.")
+				delivery.Ack(false)
+			case NackRequeue:
+				log.Printf("nack requeue")
+				delivery.Nack(false, true)
+			case NackDiscard:
+				log.Printf("nack discarded")
+				delivery.Nack(false, false)
+			}
+
+		}
+	}()
+
+	return nil
+}
+
+func SubscribeGob[T any](conn *amqp.Connection, exchange, queueName, key string, queueType SimpleQueueType, handler func(T) AckType) error {
+	ch, queue, err := DeclareAndBind(
+		conn,
+		exchange,
+		queueName,
+		key,
+		queueType,
+	)
+	if err != nil {
+		return fmt.Errorf("Could not declare and bind queue: %v", err)
+	}
+	log.Printf("Queue %v declared and bound!", queue)
+
+	deliveries, err := ch.Consume(
+		queue.Name,
+		"", // consumer name empty will be auto generated
+		false,
+		false,
+		false,
+		false,
+		nil,
+	)
+	if err != nil {
+		return fmt.Errorf("Could not consume queue: %v", err)
+	}
+
+	go func() {
+		for delivery := range deliveries {
+			reader := bytes.NewReader(delivery.Body)
+			dec := gob.NewDecoder(reader)
+			var msg T
+			err := dec.Decode(&msg)
+			if err != nil {
+				log.Printf("error while decoding delivery body: %v", err)
 				continue
 			}
 			ackType := handler(msg)
