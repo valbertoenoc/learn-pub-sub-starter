@@ -129,6 +129,13 @@ func SubscribeGob[T any](conn *amqp.Connection, exchange, queueName, key string,
 	}
 	log.Printf("Queue %v declared and bound!", queue)
 
+	// set prefetch count
+	const prefetchCount = 10
+	err = ch.Qos(prefetchCount, 0, false)
+	if err != nil {
+		return fmt.Errorf("Could not set Qos properly: %v", err)
+	}
+
 	deliveries, err := ch.Consume(
 		queue.Name,
 		"", // consumer name empty will be auto generated
